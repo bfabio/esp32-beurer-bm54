@@ -1,0 +1,6 @@
+## IDF Component Manager manifest
+dependencies:
+  idf: ">=5.1.4"
+  espressif/esp-zigbee-lib: "*"
+  espressif/esp-zboss-lib: "*"
+  espressif/led_strip: ">=2.0.0"
