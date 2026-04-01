@@ -1,6 +1,9 @@
 #include "ble_bp_client.h"
 
 #include <string.h>
+#include <inttypes.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -9,6 +12,7 @@
 #include "host/ble_hs.h"
 #include "host/ble_gap.h"
 #include "host/ble_gatt.h"
+#include "host/ble_sm.h"
 #include "host/util/util.h"
 #include "bp_parser.h"
 #include "led_status.h"
@@ -56,6 +60,51 @@ static int      write_cccd_cb(uint16_t conn_handle,
                                const struct ble_gatt_error *error,
                                struct ble_gatt_attr *attr,
                                void *arg);
+
+/* ------------------------------------------------------------------ */
+/* Passkey entry (MITM bonding)                                        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Runs in a dedicated task so the NimBLE host task is not blocked while
+ * waiting for UART input.  The user types the 6-digit passkey displayed
+ * on the BM54 screen and presses Enter.
+ */
+static void passkey_entry_task(void *arg)
+{
+    uint16_t conn_handle = (uint16_t)(uintptr_t)arg;
+    char buf[8];
+    int  idx = 0;
+    int  c;
+
+    ESP_LOGI(TAG, ">>> Type the 6-digit passkey shown on BM54, then Enter:");
+
+    while (idx < 6) {
+        c = getchar();
+        if (c == EOF) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+        if (c >= '0' && c <= '9') {
+            buf[idx++] = (char)c;
+            putchar(c);
+            fflush(stdout);
+        }
+    }
+    buf[6] = '\0';
+    putchar('\n');
+
+    struct ble_sm_io io = {
+        .action  = BLE_SM_IOACT_INPUT,
+        .passkey = (uint32_t)atoi(buf),
+    };
+    ESP_LOGI(TAG, "injecting passkey %06" PRIu32, io.passkey);
+    int rc = ble_sm_inject_io(conn_handle, &io);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "ble_sm_inject_io failed: %d", rc);
+    }
+    vTaskDelete(NULL);
+}
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                              */
@@ -149,8 +198,17 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
         start_scan();
         break;
 
-    case BLE_GAP_EVENT_ENC_CHANGE:
-        ESP_LOGI(TAG, "ENC_CHANGE status=%d", event->enc_change.status);
+    case BLE_GAP_EVENT_ENC_CHANGE: {
+        ESP_LOGI(TAG, "ENC_CHANGE status=%d cccd_hdl=%d meas_hdl=%d",
+                 event->enc_change.status, s_cccd_hdl, s_meas_val_hdl);
+        if (event->enc_change.status == 0) {
+            struct ble_gap_conn_desc desc;
+            if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {
+                ESP_LOGI(TAG, "  sec: encrypted=%d authenticated=%d bonded=%d key_size=%d",
+                         desc.sec_state.encrypted, desc.sec_state.authenticated,
+                         desc.sec_state.bonded, desc.sec_state.key_size);
+            }
+        }
         if (event->enc_change.status != 0) {
             ESP_LOGE(TAG, "encryption/bonding failed: %d", event->enc_change.status);
             ble_gap_terminate(s_conn_handle, BLE_ERR_REM_USER_CONN_TERM);
@@ -203,6 +261,15 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
         }
         break;
     }
+
+    case BLE_GAP_EVENT_PASSKEY_ACTION:
+        ESP_LOGI(TAG, "PASSKEY_ACTION action=%d", event->passkey.params.action);
+        if (event->passkey.params.action == BLE_SM_IOACT_INPUT) {
+            xTaskCreate(passkey_entry_task, "passkey",
+                        2048, (void *)(uintptr_t)event->passkey.conn_handle,
+                        5, NULL);
+        }
+        break;
 
     case BLE_GAP_EVENT_REPEAT_PAIRING: {
         /* Bond already exists; delete old one and re-pair */
@@ -313,7 +380,7 @@ static int disc_dsc_cb(uint16_t conn_handle,
 
 static void write_cccd_indicate(void)
 {
-    /* CCCD value 0x0003 enables notifications and indications */
+    /* enable notifications and indications */
     static const uint8_t val[2] = { 0x03, 0x00 };
 
     ESP_LOGI(TAG, "enabling indications on BP Measurement");
@@ -378,13 +445,13 @@ void ble_bp_client_start(void)
     ble_hs_cfg.reset_cb  = on_reset;
     ble_hs_cfg.sync_cb   = on_sync;
 
-    /* Just Works bonding */
-    ble_hs_cfg.sm_io_cap  = BLE_HS_IO_NO_INPUT_OUTPUT;
+    /* Passkey Entry bonding - BM54 displays passkey, we type it */
+    ble_hs_cfg.sm_io_cap  = BLE_HS_IO_KEYBOARD_ONLY;
     ble_hs_cfg.sm_bonding = 1;
-    ble_hs_cfg.sm_mitm    = 0;
+    ble_hs_cfg.sm_mitm    = 1;
     ble_hs_cfg.sm_sc      = 1;
-    
-    
+    ble_hs_cfg.sm_our_key_dist   = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+    ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
 
     /* Persist bond keys in NVS */
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
