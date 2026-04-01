@@ -342,7 +342,7 @@ static int disc_chr_cb(uint16_t conn_handle,
     /* Discover descriptors for this characteristic.
      * NimBLE starts at chr_val_handle + 1 internally. */
     ble_gattc_disc_all_dscs(conn_handle,
-                             chr->val_handle + 1,
+                             chr->val_handle,
                              s_svc_end_hdl,
                              disc_dsc_cb, NULL);
     return 0;
@@ -367,7 +367,7 @@ static int disc_dsc_cb(uint16_t conn_handle,
         return 0;
     }
 
-    if (ble_uuid_cmp(&dsc->uuid.u, &s_cccd_uuid.u) == 0 ) {
+    if (ble_uuid_cmp(&dsc->uuid.u, &s_cccd_uuid.u) == 0 && s_cccd_hdl == 0) {
         ESP_LOGI(TAG, "CCCD found at handle %d", dsc->handle);
         s_cccd_hdl = dsc->handle;
     }
@@ -380,8 +380,8 @@ static int disc_dsc_cb(uint16_t conn_handle,
 
 static void write_cccd_indicate(void)
 {
-    /* enable notifications and indications */
-    static const uint8_t val[2] = { 0x03, 0x00 };
+    /* CCCD value 0x0002 enables indications */
+    static const uint8_t val[2] = { 0x02, 0x00 };
 
     ESP_LOGI(TAG, "enabling indications on BP Measurement");
     int rc = ble_gattc_write_flat(s_conn_handle, s_cccd_hdl,
