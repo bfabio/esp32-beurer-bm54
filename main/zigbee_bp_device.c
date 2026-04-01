@@ -323,7 +323,7 @@ static void zigbee_task(void *arg)
 
 void zigbee_bp_device_start(void)
 {
-    s_meas_queue = xQueueCreate(4, sizeof(bp_measurement_t));
+    s_meas_queue = xQueueCreate(1, sizeof(bp_measurement_t));
     assert(s_meas_queue);
 
     esp_zb_platform_config_t config = {
@@ -338,7 +338,7 @@ void zigbee_bp_device_start(void)
 void zigbee_bp_device_update(const bp_measurement_t *meas)
 {
     if (s_meas_queue) {
-        xQueueSend(s_meas_queue, meas);
+        xQueueOverwrite(s_meas_queue, meas);
     }
 }
 
