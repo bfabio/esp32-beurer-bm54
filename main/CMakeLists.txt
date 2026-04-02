@@ -10,6 +10,7 @@ idf_component_register(
         bt
         nvs_flash
         freertos
+        driver
         espressif__esp-zigbee-lib
         espressif__led_strip
 )

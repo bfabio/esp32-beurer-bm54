@@ -22,6 +22,7 @@ static const char *TAG = "zigbee_bp";
 
 /* Queue used to pass measurements from NimBLE task to Zigbee task */
 static QueueHandle_t s_meas_queue;
+static bool s_factory_new = false;
 
 /* ------------------------------------------------------------------ */
 /* Endpoint / cluster creation helpers                                  */
@@ -291,6 +292,10 @@ static void zigbee_task(void *arg)
 
     esp_zb_set_primary_network_channel_set(ZB_CHANNEL_MASK);
 
+    if (s_factory_new) {
+        ESP_LOGW(TAG, "Factory reset: erasing Zigbee NVRAM");
+        esp_zb_nvram_erase_at_start(true);
+    }
 
     ESP_ERROR_CHECK(esp_zb_start(false));
 
@@ -321,8 +326,9 @@ static void zigbee_task(void *arg)
 /* Public API                                                           */
 /* ------------------------------------------------------------------ */
 
-void zigbee_bp_device_start(void)
+void zigbee_bp_device_start(bool factory_new)
 {
+    s_factory_new = factory_new;
     s_meas_queue = xQueueCreate(1, sizeof(bp_measurement_t));
     assert(s_meas_queue);
 

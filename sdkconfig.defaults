@@ -18,6 +18,7 @@ CONFIG_BT_NIMBLE_SM_MITM=n
 
 # NVS for bond key persistence
 CONFIG_NVS_FLASH=y
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
 
 # Zigbee - end device (ZED)
 CONFIG_ZB_ENABLED=y
