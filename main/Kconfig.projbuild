@@ -1,0 +1,13 @@
+menu "Beurer BM54 Bridge"
+
+    config BM54_BLE_ADDR
+        string "BM54 BLE address (NimBLE little-endian, comma-separated hex bytes)"
+        default "0xA1, 0x43, 0x73, 0xED, 0x7F, 0x0C"
+        help
+            Bluetooth MAC address of the target BM54 in NimBLE byte order
+            (little-endian). Find it with nRF Connect or similar scanner.
+
+            Example: if the MAC is 0C:7F:ED:73:43:A1, enter
+            0xA1, 0x43, 0x73, 0xED, 0x7F, 0x0C
+
+endmenu
