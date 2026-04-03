@@ -50,9 +50,9 @@ static esp_zb_ep_list_t *create_ep_list(void)
         esp_zb_cluster_list_add_basic_cluster(cl, basic,
             ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 
-        /* ZHA reads measured_value as hPa. We store mmHg converted to hPa
-         * (1 mmHg = 1.33322 hPa) so that ZHA's built-in unit conversion to
-         * mmHg in the HA UI produces the correct value. */
+        /* ZHA labels PressureMeasurement as hPa but the raw value is just
+         * an int16. We store mmHg directly; change the entity unit to mmHg
+         * in the HA UI without letting HA convert. */
         esp_zb_pressure_meas_cluster_cfg_t pm_cfg = {
             .measured_value = 0,
             .min_value      = 80,   /* ~60 mmHg */
@@ -124,13 +124,9 @@ static esp_zb_ep_list_t *create_ep_list(void)
 /* Attribute update                                                     */
 /* ------------------------------------------------------------------ */
 
-/* EP1 / EP2: PressureMeasurement — convert mmHg to hPa (1 mmHg = 1.33322 hPa)
- * so ZHA stores a physically correct hPa value. Leave the unit as hPa in HA;
- * do NOT use HA's unit conversion to mmHg (it would produce floating-point
- * results). Rename the entities in HA to make clear they are blood pressure. */
 static void set_pressure_value(uint8_t endpoint, float mmhg)
 {
-    int16_t val = (int16_t)roundf(mmhg * 1.33322f);
+    int16_t val = (int16_t)roundf(mmhg);
     esp_zb_zcl_set_attribute_val(
         endpoint,
         ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT,
