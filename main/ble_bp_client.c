@@ -20,9 +20,12 @@
 
 static const char *TAG = "ble_bp";
 
-/* BM54 Bluetooth address (little-endian byte order for NimBLE) */
+/*
+ * Target BM54 Bluetooth address in NimBLE byte order (little-endian).
+ * Set CONFIG_BM54_BLE_ADDR in sdkconfig or via Kconfig.
+ */
 #define BM54_ADDR_TYPE  BLE_ADDR_PUBLIC
-static const uint8_t BM54_ADDR[6] = { 0xA1, 0x43, 0x73, 0xED, 0x7F, 0x0C };
+static const uint8_t BM54_ADDR[6] = { CONFIG_BM54_BLE_ADDR };
 
 /* Blood Pressure service / characteristic UUIDs */
 static const ble_uuid16_t s_bp_svc_uuid  = BLE_UUID16_INIT(0x1810);
