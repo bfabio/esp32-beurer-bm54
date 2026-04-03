@@ -156,7 +156,7 @@ static void start_scan(void)
         .filter_duplicates = 1,
     };
 
-    led_status_set(LED_BLE_SCANNING);
+    led_status_set(LED_READY);
     ESP_LOGI(TAG, "scanning for BM54...");
     int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params,
                           scan_event_cb, NULL);
@@ -181,7 +181,7 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
             break;
         }
         s_conn_handle = event->connect.conn_handle;
-        led_status_set(LED_BLE_CONNECTED);
+        led_status_set(LED_RECEIVING);
         ESP_LOGI(TAG, "connected, handle=%d", s_conn_handle);
 
         /* Trigger bonding / encryption */
@@ -189,7 +189,7 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
         break;
 
     case BLE_GAP_EVENT_DISCONNECT:
-        led_status_set(LED_BLE_SCANNING);
+        led_status_set(LED_READY);
         zigbee_bp_set_ble_connecting(false);
         ESP_LOGW(TAG, "disconnected, reason=%d", event->disconnect.reason);
         s_conn_handle = BLE_HS_CONN_HANDLE_NONE;

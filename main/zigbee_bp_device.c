@@ -124,13 +124,13 @@ static esp_zb_ep_list_t *create_ep_list(void)
 /* Attribute update                                                     */
 /* ------------------------------------------------------------------ */
 
-/* EP1 / EP2: PressureMeasurement — store mmHg directly as int16.
- * ZHA labels the unit as hPa but the number is the correct mmHg value.
- * In the HA UI, change the entity unit to mmHg without letting HA convert
- * (the value is already in mmHg). */
+/* EP1 / EP2: PressureMeasurement — convert mmHg to hPa (1 mmHg = 1.33322 hPa)
+ * so ZHA stores a physically correct hPa value. Leave the unit as hPa in HA;
+ * do NOT use HA's unit conversion to mmHg (it would produce floating-point
+ * results). Rename the entities in HA to make clear they are blood pressure. */
 static void set_pressure_value(uint8_t endpoint, float mmhg)
 {
-    int16_t val = (int16_t)roundf(mmhg);
+    int16_t val = (int16_t)roundf(mmhg * 1.33322f);
     esp_zb_zcl_set_attribute_val(
         endpoint,
         ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT,
@@ -179,11 +179,11 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         if (err_status == ESP_OK) {
             if (esp_zb_bdb_is_factory_new()) {
                 ESP_LOGI(TAG, "Device is factory-new, starting network steering");
-                led_status_set(LED_ZB_STEERING);
+                led_status_set(LED_CONNECTING);
                 esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
             } else {
                 ESP_LOGI(TAG, "Rejoining existing network");
-                led_status_set(LED_ZB_JOINED);
+                led_status_set(LED_READY);
             }
         } else {
             ESP_LOGW(TAG, "Startup failed (%s), retrying steering",
@@ -200,7 +200,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
             esp_zb_get_extended_pan_id(extended_pan_id);
             ESP_LOGI(TAG, "Joined network, PAN ID 0x%04hx, channel %d",
                      esp_zb_get_pan_id(), esp_zb_get_current_channel());
-            led_status_set(LED_ZB_JOINED);
+            led_status_set(LED_READY);
         } else {
             ESP_LOGW(TAG, "Steering failed (%s), retrying in 1s",
                      esp_err_to_name(err_status));

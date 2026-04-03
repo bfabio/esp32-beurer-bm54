@@ -12,20 +12,14 @@
 static const char *TAG = "led";
 
 static led_strip_handle_t s_strip;
-static led_state_t        s_state = LED_BOOTING;
+static led_state_t        s_state = LED_CONNECTING;
 static SemaphoreHandle_t  s_mutex;
-
-/* ------------------------------------------------------------------ */
-/* Colour helpers                                                       */
-/* ------------------------------------------------------------------ */
 
 typedef struct { uint8_t r, g, b; } rgb_t;
 
-static const rgb_t COL_WHITE  = { BRIGHTNESS, BRIGHTNESS, BRIGHTNESS };
-static const rgb_t COL_BLUE   = { 0, 0, BRIGHTNESS };
-static const rgb_t COL_YELLOW = { BRIGHTNESS, BRIGHTNESS, 0 };
-static const rgb_t COL_GREEN  = { 0, BRIGHTNESS, 0 };
-static const rgb_t COL_RED    = { BRIGHTNESS, 0, 0 };
+static const rgb_t COL_BLUE  = { 0, 0, BRIGHTNESS };
+static const rgb_t COL_GREEN = { 0, BRIGHTNESS, 0 };
+static const rgb_t COL_RED   = { BRIGHTNESS, 0, 0 };
 
 static void set_pixel(rgb_t c)
 {
@@ -38,19 +32,13 @@ static void led_off(void)
     led_strip_clear(s_strip);
 }
 
-static void blink(rgb_t colour, uint32_t on_ms, uint32_t off_ms, int times)
+static void blink(rgb_t colour, uint32_t on_ms, uint32_t off_ms)
 {
-    for (int i = 0; i < times; i++) {
-        set_pixel(colour);
-        vTaskDelay(pdMS_TO_TICKS(on_ms));
-        led_off();
-        vTaskDelay(pdMS_TO_TICKS(off_ms));
-    }
+    set_pixel(colour);
+    vTaskDelay(pdMS_TO_TICKS(on_ms));
+    led_off();
+    vTaskDelay(pdMS_TO_TICKS(off_ms));
 }
-
-/* ------------------------------------------------------------------ */
-/* LED task                                                             */
-/* ------------------------------------------------------------------ */
 
 static void led_task(void *arg)
 {
@@ -60,52 +48,25 @@ static void led_task(void *arg)
         xSemaphoreGive(s_mutex);
 
         switch (state) {
-        case LED_BOOTING:
-            blink(COL_WHITE, 300, 700, 1);
+        case LED_CONNECTING:
+            blink(COL_BLUE, 500, 500);
             break;
 
-        case LED_ZB_STEERING:
-            blink(COL_BLUE, 100, 100, 1);
-            break;
-
-        case LED_ZB_JOINED:
-            /* solid blue for 1 s, then off */
-            set_pixel(COL_BLUE);
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            led_off();
-            /* Switch to scanning state automatically */
-            xSemaphoreTake(s_mutex, portMAX_DELAY);
-            if (s_state == LED_ZB_JOINED) s_state = LED_BLE_SCANNING;
-            xSemaphoreGive(s_mutex);
-            break;
-
-        case LED_BLE_SCANNING:
-            blink(COL_YELLOW, 800, 1200, 1);
-            break;
-
-        case LED_BLE_CONNECTED:
+        case LED_READY:
             set_pixel(COL_GREEN);
-            vTaskDelay(pdMS_TO_TICKS(500));
+            vTaskDelay(pdMS_TO_TICKS(200));
             break;
 
-        case LED_MEASUREMENT:
-            /* 3 white flashes, then fall back to connected */
-            blink(COL_WHITE, 80, 80, 3);
-            xSemaphoreTake(s_mutex, portMAX_DELAY);
-            if (s_state == LED_MEASUREMENT) s_state = LED_BLE_SCANNING;
-            xSemaphoreGive(s_mutex);
+        case LED_RECEIVING:
+            blink(COL_GREEN, 100, 100);
             break;
 
         case LED_ERROR:
-            blink(COL_RED, 80, 80, 1);
+            blink(COL_RED, 150, 150);
             break;
         }
     }
 }
-
-/* ------------------------------------------------------------------ */
-/* Public API                                                           */
-/* ------------------------------------------------------------------ */
 
 void led_status_init(void)
 {
@@ -134,4 +95,15 @@ void led_status_set(led_state_t state)
     xSemaphoreTake(s_mutex, portMAX_DELAY);
     s_state = state;
     xSemaphoreGive(s_mutex);
+}
+
+void led_status_raw(uint8_t r, uint8_t g, uint8_t b)
+{
+    led_strip_set_pixel(s_strip, 0, r, g, b);
+    led_strip_refresh(s_strip);
+}
+
+void led_status_off(void)
+{
+    led_strip_clear(s_strip);
 }
